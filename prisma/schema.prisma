@@ -1,0 +1,48 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SpaceStatus {
+  AVAILABLE
+  HOLD
+  OCCUPIED
+  OVERDUE
+}
+
+model ParkingLot {
+  id    String @id @default(cuid())
+  name  String
+  zones Zone[]
+}
+
+model Zone {
+  id     String     @id @default(cuid())
+  name   String
+  lotId  String
+  lot    ParkingLot @relation(fields: [lotId], references: [id])
+  spaces Space[]
+}
+
+model Space {
+  id      String      @id @default(cuid())
+  code    String
+  zoneId  String
+  zone    Zone        @relation(fields: [zoneId], references: [id])
+  status  SpaceStatus @default(AVAILABLE)
+  tickets Ticket[]
+  @@unique([zoneId, code])
+}
+
+model Ticket {
+  id           String    @id @default(cuid())
+  spaceId      String
+  space        Space     @relation(fields: [spaceId], references: [id])
+  vehiclePlate String
+  checkinAt    DateTime  @default(now())
+  checkoutAt   DateTime?
+}
