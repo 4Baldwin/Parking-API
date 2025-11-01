@@ -1,27 +1,27 @@
-import { Controller, Get, Query } from '@nestjs/common';
+// src/spaces.controller.ts
+
+import { Controller, Get, Query, Post, Param } from '@nestjs/common'; // <--- เพิ่ม Post, Param
 import { PrismaService } from './prisma.service';
 import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { SpaceQueryDto } from './dto/space-query.dto';
+import { TicketsService } from './tickets.service'; // <--- เพิ่ม Import TicketsService
 
 @ApiTags('spaces')
 @Controller('spaces')
 export class SpacesController {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private ticketsService: TicketsService, // <--- เพิ่ม Inject TicketsService
+  ) {}
 
+  /**
+   * (เดิม) Endpoiont สำหรับดูรายการช่องจอด
+   * GET /spaces
+   */
   @Get()
-  @ApiOkResponse({
-    description: 'List spaces with optional filters & pagination',
-    schema: {
-      example: {
-        data: [
-          { id: 'cmh...', code: 'A1', zoneId: 'cmh...', status: 'AVAILABLE' },
-          { id: 'cmh...', code: 'A2', zoneId: 'cmh...', status: 'OCCUPIED' }
-        ],
-        meta: { page: 1, page_size: 10, total_items: 42, total_pages: 5 }
-      }
-    }
-  })
+  @ApiOkResponse({ /* ... */ })
   async list(@Query() q: SpaceQueryDto) {
+    // ... (โค้ดเดิมของคุณ)
     const where: any = {};
     if (q.status) where.status = q.status;
     if (q.zone_id) where.zoneId = q.zone_id;
@@ -51,5 +51,15 @@ export class SpacesController {
         total_pages: totalPages,
       },
     };
+  }
+
+  /**
+   * (ใหม่) Endpoiont สำหรับ Sensor เพื่อยืนยันว่ารถออกจากช่องจอดแล้ว
+   * POST /spaces/confirm-vacant/:id
+   */
+  @Post('confirm-vacant/:id')
+  async confirmVacant(@Param('id') spaceId: string) {
+    // Endpoint นี้ควรถูกเรียกโดย Hardware Sensor เท่านั้น
+    return this.ticketsService.confirmVacant(spaceId);
   }
 }

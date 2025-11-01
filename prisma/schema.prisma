@@ -7,12 +7,52 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// สถานะช่องจอด
 enum SpaceStatus {
-  AVAILABLE
-  HOLD
-  OCCUPIED
-  OVERDUE
+  AVAILABLE      // ว่าง
+  RESERVED       // จองแล้ว (จ่าย 15 บาทแล้ว)
+  OCCUPIED       // มีรถจอดอยู่
+  PENDING_VACATE // จ่ายเงิน (ตอนออก) แล้ว แต่รถยังไม่ออก
 }
+
+// สถานะตั๋ว
+enum TicketStatus {
+  RESERVED        // (จ่าย 15 บาทแล้ว) จองสำเร็จ, รอ Check-in (60 นาที)
+  PARKED          // Check-in แล้ว, กำลังจอด
+  COMPLETED       // Check-out และ Sensor ยืนยันแล้ว
+  NO_SHOW         // เลย 60 นาที (RESERVED) / 15 นาที (PENDING_PAYMENT)
+  PENDING_PAYMENT // (รอจ่ายเงิน) ทั้งตอนจอง (15 บาท) และตอนออก
+  PAID            // (จ่ายเงินตอนออกแล้ว) รอรถออก (5 นาที)
+  OVERSTAYING     // จอดแช่ (เลย 5 นาทีหลัง PAID)
+}
+
+// --- Model User ---
+model User {
+  id        String    @id @default(cuid())
+  email     String    @unique // ใช้ Email เป็น Username และต้องไม่ซ้ำ
+  password  String    // จะเก็บ Password ที่ถูก Hash แล้ว
+  name      String?   // ชื่อ (Optional)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  tickets           Ticket[]            // ความสัมพันธ์: User หนึ่งคนมีได้หลาย Ticket
+  passwordResetTokens PasswordResetToken[] // ความสัมพันธ์: User หนึ่งคนมีได้หลาย Token รีเซ็ต
+}
+// --- สิ้นสุด Model User ---
+
+// --- Model PasswordResetToken ---
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  token     String   @unique // Token ที่สร้างขึ้น (ควร Hash ก่อนเก็บ)
+  userId    String   // ID ของ User ที่ขอรีเซ็ต
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade) // ถ้าลบ User ให้ลบ Token ด้วย
+  expiresAt DateTime // เวลาหมดอายุของ Token
+
+  createdAt DateTime @default(now())
+
+  @@index([userId]) // เพิ่ม Index เพื่อค้นหาตาม userId ได้เร็วขึ้น
+}
+// --- สิ้นสุด Model PasswordResetToken ---
 
 model ParkingLot {
   id    String @id @default(cuid())
@@ -29,20 +69,41 @@ model Zone {
 }
 
 model Space {
-  id      String      @id @default(cuid())
-  code    String
-  zoneId  String
-  zone    Zone        @relation(fields: [zoneId], references: [id])
-  status  SpaceStatus @default(AVAILABLE)
-  tickets Ticket[]
+  id            String      @id @default(cuid())
+  code          String
+  zoneId        String
+  zone          Zone        @relation(fields: [zoneId], references: [id])
+  status        SpaceStatus @default(AVAILABLE)
+  currentTicketId String?
+  tickets       Ticket[]
+
   @@unique([zoneId, code])
 }
 
 model Ticket {
-  id           String    @id @default(cuid())
-  spaceId      String
-  space        Space     @relation(fields: [spaceId], references: [id])
-  vehiclePlate String
-  checkinAt    DateTime  @default(now())
-  checkoutAt   DateTime?
+  id                      String      @id @default(cuid())
+
+  spaceId                 String
+  space                   Space       @relation(fields: [spaceId], references: [id])
+  vehiclePlate            String
+
+  status                  TicketStatus
+  reservationStartTime    DateTime?     // ตั้งค่าหลังจ่าย 15 บาท
+  pricePaidOnReservation  Decimal       @default(0) @db.Decimal(10, 2)
+
+  checkinAt               DateTime?
+  checkoutAt              DateTime?
+
+  totalParkingFee         Decimal?      @db.Decimal(10, 2)
+  amountDue               Decimal?      @db.Decimal(10, 2)
+
+  cancellationReason      String?
+  gracePeriodStartedAt    DateTime?     // สำหรับจับเวลา 5 นาที (จอดแช่)
+
+  createdAt               DateTime    @default(now()) // สำหรับจับเวลา PENDING_PAYMENT
+
+  // --- ความสัมพันธ์กับ User ---
+  userId    String?   // ID ของ User ที่จองตั๋วใบนี้ (Optional)
+  user      User?     @relation(fields: [userId], references: [id])
+  // --- สิ้นสุดความสัมพันธ์ ---
 }
