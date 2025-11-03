@@ -7,59 +7,48 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// สถานะช่องจอด
+// (Enums: SpaceStatus, TicketStatus ...)
 enum SpaceStatus {
-  AVAILABLE      // ว่าง
-  RESERVED       // จองแล้ว (จ่าย 15 บาทแล้ว)
-  OCCUPIED       // มีรถจอดอยู่
-  PENDING_VACATE // จ่ายเงิน (ตอนออก) แล้ว แต่รถยังไม่ออก
+  AVAILABLE
+  RESERVED
+  OCCUPIED
+  PENDING_VACATE
 }
-
-// สถานะตั๋ว
 enum TicketStatus {
-  RESERVED        // (จ่าย 15 บาทแล้ว) จองสำเร็จ, รอ Check-in (60 นาที)
-  PARKED          // Check-in แล้ว, กำลังจอด
-  COMPLETED       // Check-out และ Sensor ยืนยันแล้ว
-  NO_SHOW         // เลย 60 นาที (RESERVED) / 15 นาที (PENDING_PAYMENT)
-  PENDING_PAYMENT // (รอจ่ายเงิน) ทั้งตอนจอง (15 บาท) และตอนออก
-  PAID            // (จ่ายเงินตอนออกแล้ว) รอรถออก (5 นาที)
-  OVERSTAYING     // จอดแช่ (เลย 5 นาทีหลัง PAID)
+  RESERVED
+  PARKED
+  COMPLETED
+  NO_SHOW
+  PENDING_PAYMENT
+  PAID
+  OVERSTAYING
 }
 
-// --- Model User ---
+// (Models: User, PasswordResetToken, ParkingLot, Zone, Space ...)
 model User {
-  id        String    @id @default(cuid())
-  email     String    @unique // ใช้ Email เป็น Username และต้องไม่ซ้ำ
-  password  String    // จะเก็บ Password ที่ถูก Hash แล้ว
-  name      String?   // ชื่อ (Optional)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-
-  tickets           Ticket[]            // ความสัมพันธ์: User หนึ่งคนมีได้หลาย Ticket
-  passwordResetTokens PasswordResetToken[] // ความสัมพันธ์: User หนึ่งคนมีได้หลาย Token รีเซ็ต
+  id                  String               @id @default(cuid())
+email               String               @unique
+  password            String
+  name                String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  tickets             Ticket[]
+  passwordResetTokens PasswordResetToken[]
 }
-// --- สิ้นสุด Model User ---
-
-// --- Model PasswordResetToken ---
 model PasswordResetToken {
   id        String   @id @default(cuid())
-  token     String   @unique // Token ที่สร้างขึ้น (ควร Hash ก่อนเก็บ)
-  userId    String   // ID ของ User ที่ขอรีเซ็ต
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade) // ถ้าลบ User ให้ลบ Token ด้วย
-  expiresAt DateTime // เวลาหมดอายุของ Token
-
+token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
   createdAt DateTime @default(now())
-
-  @@index([userId]) // เพิ่ม Index เพื่อค้นหาตาม userId ได้เร็วขึ้น
+  @@index([userId])
 }
-// --- สิ้นสุด Model PasswordResetToken ---
-
 model ParkingLot {
   id    String @id @default(cuid())
   name  String
   zones Zone[]
 }
-
 model Zone {
   id     String     @id @default(cuid())
   name   String
@@ -67,43 +56,47 @@ model Zone {
   lot    ParkingLot @relation(fields: [lotId], references: [id])
   spaces Space[]
 }
-
 model Space {
-  id            String      @id @default(cuid())
-  code          String
-  zoneId        String
-  zone          Zone        @relation(fields: [zoneId], references: [id])
-  status        SpaceStatus @default(AVAILABLE)
+  id              String      @id @default(cuid())
+  code            String
+  zoneId          String
+  zone            Zone        @relation(fields: [zoneId], references: [id])
+  status          SpaceStatus @default(AVAILABLE)
   currentTicketId String?
-  tickets       Ticket[]
-
+  tickets         Ticket[]
   @@unique([zoneId, code])
 }
 
+// --- (*** แก้ไข Model Ticket ***) ---
 model Ticket {
-  id                      String      @id @default(cuid())
+  id           String     @id @default(cuid())
+  spaceId      String
+  space        Space      @relation(fields: [spaceId], references: [id])
+vehiclePlate String
+  status       TicketStatus
 
-  spaceId                 String
-  space                   Space       @relation(fields: [spaceId], references: [id])
-  vehiclePlate            String
+  // --- (START) ส่วนที่แก้ไข/เพิ่ม ---
+  
+  // (เพิ่ม) เก็บว่าผู้ใช้เลือกจอง 30 หรือ 60 นาที
+  // (เพิ่ม @default(30) เพื่อแก้ปัญหา Migrate)
+  prePaidDurationMinutes Int      @default(30)
+  
+// (เหมือนเดิม) ตั้งค่าหลังจ่าย 15/30 บาท
+  reservationStartTime DateTime?
+  
+  // (เปลี่ยนชื่อจาก pricePaidOnReservation) เก็บ "ยอดสะสม" ที่จ่ายแล้วทั้งหมด
+  cumulativePaid Decimal @default(0) @db.Decimal(10, 2)
+  
+  // --- (END) ส่วนที่แก้ไข ---
 
-  status                  TicketStatus
-  reservationStartTime    DateTime?     // ตั้งค่าหลังจ่าย 15 บาท
-  pricePaidOnReservation  Decimal       @default(0) @db.Decimal(10, 2)
-
-  checkinAt               DateTime?
-  checkoutAt              DateTime?
-
-  totalParkingFee         Decimal?      @db.Decimal(10, 2)
-  amountDue               Decimal?      @db.Decimal(10, 2)
-
-  cancellationReason      String?
-  gracePeriodStartedAt    DateTime?     // สำหรับจับเวลา 5 นาที (จอดแช่)
-
-  createdAt               DateTime    @default(now()) // สำหรับจับเวลา PENDING_PAYMENT
-
-  // --- ความสัมพันธ์กับ User ---
-  userId    String?   // ID ของ User ที่จองตั๋วใบนี้ (Optional)
-  user      User?     @relation(fields: [userId], references: [id])
-  // --- สิ้นสุดความสัมพันธ์ ---
+checkinAt            DateTime?
+checkoutAt           DateTime?
+totalParkingFee      Decimal?   @db.Decimal(10, 2)
+amountDue            Decimal?   @db.Decimal(10, 2)
+cancellationReason   String?
+gracePeriodStartedAt DateTime?
+  createdAt            DateTime   @default(now())
+userId               String?
+user                 User?      @relation(fields: [userId], references: [id])
 }
+// --- (สิ้นสุด Model Ticket) ---
