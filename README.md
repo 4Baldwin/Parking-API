@@ -1,5 +1,5 @@
-## วิทยานิพนธ์ ชื่อ ConnectAPark
--> ยังไม่เสร็จสมบูรณ์
+## ส่วน Backend ของวิทยานิพนธ์ ConnectAPark
+-> ค่อนข้างสมบูรณ์
 ## 
 
 <p align="center">
