@@ -2,6 +2,10 @@
 **Smart Parking Management System for Thesis Project**  
 Built with **NestJS**, **Prisma**, **PostgreSQL**, and **Docker**
 
+> ✅ **Status:** This backend (API) has been fully completed and is ready for use.  
+> ✅ **สถานะ:** Backend นี้พัฒนาเสร็จสมบูรณ์แล้ว และพร้อมสำหรับการใช้งาน.
+
+
 ---
 
 ## 📌 Overview
