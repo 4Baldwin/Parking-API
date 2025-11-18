@@ -52,4 +52,6 @@ ConnectAPark เป็นระบบบริหารจัดการที�
 
 ---
 
-## 🧬 System Architecture (High-level)
+## Developer
+Supawat Arrakrattanakun (4Baldwin)
+ConnectAPark -> Thesis Project -> Rangsit University
